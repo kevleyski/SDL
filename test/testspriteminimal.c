@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
     int i;
 
     /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
+    SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (argc > 1) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "USAGE: %s\n", argv[0]);
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
         positions[i].h = (float)sprite_h;
         velocities[i].x = 0.0f;
         velocities[i].y = 0.0f;
-        while (!velocities[i].x && !velocities[i].y) {
+        while (velocities[i].x == 0.f && velocities[i].y == 0.f) {
             velocities[i].x = (float)((rand() % (MAX_SPEED * 2 + 1)) - MAX_SPEED);
             velocities[i].y = (float)((rand() % (MAX_SPEED * 2 + 1)) - MAX_SPEED);
         }

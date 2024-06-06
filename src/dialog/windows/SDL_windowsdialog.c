@@ -22,6 +22,7 @@
 #include "../SDL_dialog_utils.h"
 
 #include <windows.h>
+#include <commdlg.h>
 #include <shlobj.h>
 #include "../../core/windows/SDL_windows.h"
 #include "../../thread/SDL_systhread.h"
@@ -33,6 +34,7 @@ typedef struct
 {
     int is_save;
     const SDL_DialogFileFilter *filters;
+    int nfilters;
     const char* default_file;
     SDL_Window* parent;
     DWORD flags;
@@ -49,18 +51,9 @@ typedef struct
 } winFArgs;
 
 /** Converts dialog.nFilterIndex to SDL-compatible value */
-int getFilterIndex(int as_reported_by_windows, const SDL_DialogFileFilter *filters)
+int getFilterIndex(int as_reported_by_windows)
 {
-    int filter_index = as_reported_by_windows - 1;
-
-    if (filter_index < 0) {
-        filter_index = 0;
-        for (const SDL_DialogFileFilter *filter = filters; filter && filter->name && filter->pattern; filter++) {
-            filter_index++;
-        }
-    }
-
-    return filter_index;
+    return as_reported_by_windows - 1;
 }
 
 /* TODO: The new version of file dialogs */
@@ -69,6 +62,7 @@ void windows_ShowFileDialog(void *ptr)
     winArgs *args = (winArgs *) ptr;
     int is_save = args->is_save;
     const SDL_DialogFileFilter *filters = args->filters;
+    int nfilters = args->nfilters;
     const char* default_file = args->default_file;
     SDL_Window* parent = args->parent;
     DWORD flags = args->flags;
@@ -159,8 +153,9 @@ void windows_ShowFileDialog(void *ptr)
     if (filters) {
         /* '\x01' is used in place of a null byte */
         /* suffix needs two null bytes in case the filter list is empty */
-        char *filterlist = convert_filters(filters, NULL, "", "", "\x01\x01", "",
-                                           "\x01", "\x01", "*.", ";*.", "");
+        char *filterlist = convert_filters(filters, nfilters, NULL, "", "",
+                                           "\x01\x01", "", "\x01", "\x01",
+                                           "*.", ";*.", "");
 
         if (!filterlist) {
             callback(userdata, NULL, -1);
@@ -223,7 +218,7 @@ void windows_ShowFileDialog(void *ptr)
             /* File is a C string stored in dialog.lpstrFile */
             char *chosen_file = WIN_StringToUTF8W(dialog.lpstrFile);
             const char* opts[2] = { chosen_file, NULL };
-            callback(userdata, opts, getFilterIndex(dialog.nFilterIndex, filters));
+            callback(userdata, opts, getFilterIndex(dialog.nFilterIndex));
             SDL_free(chosen_file);
         } else {
             /* File is either a C string if the user chose a single file, else
@@ -335,7 +330,7 @@ void windows_ShowFileDialog(void *ptr)
                 }
             }
 
-            callback(userdata, (const char * const*) chosen_files_list, getFilterIndex(dialog.nFilterIndex, filters));
+            callback(userdata, (const char * const*) chosen_files_list, getFilterIndex(dialog.nFilterIndex));
 
             for (size_t i = 0; i < nfiles; i++) {
                 SDL_free(chosen_files_list[i]);
@@ -352,7 +347,7 @@ void windows_ShowFileDialog(void *ptr)
                function before set a different error code, so it's safe to
                check for success. */
             const char* opts[1] = { NULL };
-            callback(userdata, opts, getFilterIndex(dialog.nFilterIndex, filters));
+            callback(userdata, opts, getFilterIndex(dialog.nFilterIndex));
         } else {
             SDL_SetError("Windows error, CommDlgExtendedError: %ld", pCommDlgExtendedError());
             callback(userdata, NULL, -1);
@@ -432,7 +427,7 @@ int windows_folder_dialog_thread(void* ptr)
     return 0;
 }
 
-void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, const char* default_location, SDL_bool allow_many)
+void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, int nfilters, const char* default_location, SDL_bool allow_many)
 {
     winArgs *args;
     SDL_Thread *thread;
@@ -452,13 +447,14 @@ void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL
 
     args->is_save = 0;
     args->filters = filters;
+    args->nfilters = nfilters;
     args->default_file = default_location;
     args->parent = window;
     args->flags = (allow_many == SDL_TRUE) ? OFN_ALLOWMULTISELECT : 0;
     args->callback = callback;
     args->userdata = userdata;
 
-    thread = SDL_CreateThreadInternal(windows_file_dialog_thread, "SDL_ShowOpenFileDialog", 0, (void *) args);
+    thread = SDL_CreateThread(windows_file_dialog_thread, "SDL_ShowOpenFileDialog", (void *) args);
 
     if (thread == NULL) {
         callback(userdata, NULL, -1);
@@ -469,7 +465,7 @@ void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL
     SDL_DetachThread(thread);
 }
 
-void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, const char* default_location)
+void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, int nfilters, const char* default_location)
 {
     winArgs *args;
     SDL_Thread *thread;
@@ -488,13 +484,14 @@ void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL
 
     args->is_save = 1;
     args->filters = filters;
+    args->nfilters = nfilters;
     args->default_file = default_location;
     args->parent = window;
     args->flags = 0;
     args->callback = callback;
     args->userdata = userdata;
 
-    thread = SDL_CreateThreadInternal(windows_file_dialog_thread, "SDL_ShowSaveFileDialog", 0, (void *) args);
+    thread = SDL_CreateThread(windows_file_dialog_thread, "SDL_ShowSaveFileDialog", (void *) args);
 
     if (thread == NULL) {
         callback(userdata, NULL, -1);
@@ -527,7 +524,7 @@ void SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void* userdata, S
     args->default_folder = default_location;
     args->userdata = userdata;
 
-    thread = SDL_CreateThreadInternal(windows_folder_dialog_thread, "SDL_ShowOpenFolderDialog", 0, (void *) args);
+    thread = SDL_CreateThread(windows_folder_dialog_thread, "SDL_ShowOpenFolderDialog", (void *) args);
 
     if (thread == NULL) {
         callback(userdata, NULL, -1);

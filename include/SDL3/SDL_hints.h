@@ -20,20 +20,20 @@
 */
 
 /**
- *  \file SDL_hints.h
+ * # CategoryHints
  *
- *  Official documentation for SDL configuration variables
+ * Official documentation for SDL configuration variables
  *
- *  This file contains functions to set and get configuration hints,
- *  as well as listing each of them alphabetically.
+ * This file contains functions to set and get configuration hints, as well as
+ * listing each of them alphabetically.
  *
- *  The convention for naming hints is SDL_HINT_X, where "SDL_X" is
- *  the environment variable that can be used to override the default.
+ * The convention for naming hints is SDL_HINT_X, where "SDL_X" is the
+ * environment variable that can be used to override the default.
  *
- *  In general these hints are just that - they may or may not be
- *  supported or applicable on any given platform, but they provide
- *  a way for an application or user to give the library a hint as
- *  to how they would like the library to work.
+ * In general these hints are just that - they may or may not be supported or
+ * applicable on any given platform, but they provide a way for an application
+ * or user to give the library a hint as to how they would like the library to
+ * work.
  */
 
 #ifndef SDL_hints_h_
@@ -291,6 +291,29 @@ extern "C" {
  * \since This hint is available since SDL 3.0.0.
  */
 #define SDL_HINT_AUDIO_DEVICE_APP_NAME "SDL_AUDIO_DEVICE_APP_NAME"
+
+/**
+ * Specify an application icon name for an audio device.
+ *
+ * Some audio backends (such as Pulseaudio and Pipewire) allow you to set an
+ * XDG icon name for your application. Among other things, this icon might
+ * show up in a system control panel that lets the user adjust the volume on
+ * specific audio streams instead of using one giant master volume slider.
+ * Note that this is unrelated to the icon used by the windowing system, which
+ * may be set with SDL_SetWindowIcon (or via desktop file on Wayland).
+ *
+ * Setting this to "" or leaving it unset will have SDL use a reasonable
+ * default, "applications-games", which is likely to be installed. See
+ * https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
+ * and
+ * https://specifications.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html
+ * for the relevant XDG icon specs.
+ *
+ * This hint should be set before an audio device is opened.
+ *
+ * \since This hint is available since SDL 3.0.0.
+ */
+#define SDL_HINT_AUDIO_DEVICE_APP_ICON_NAME "SDL_AUDIO_DEVICE_APP_ICON_NAME"
 
 /**
  * A variable controlling device buffer size.
@@ -1349,6 +1372,21 @@ extern "C" {
  * \since This hint is available since SDL 3.0.0.
  */
 #define SDL_HINT_JOYSTICK_HIDAPI_PS4 "SDL_JOYSTICK_HIDAPI_PS4"
+
+/**
+ * A variable controlling the update rate of the PS4 controller over Bluetooth
+ * when using the HIDAPI driver.
+ *
+ * This defaults to 4 ms, to match the behavior over USB, and to be more
+ * friendly to other Bluetooth devices and older Bluetooth hardware on the
+ * computer. It can be set to "1" (1000Hz), "2" (500Hz) and "4" (250Hz)
+ *
+ * This hint can be set anytime, but only takes effect when extended input
+ * reports are enabled.
+ *
+ * \since This hint is available since SDL 3.0.0.
+ */
+#define SDL_HINT_JOYSTICK_HIDAPI_PS4_REPORT_INTERVAL "SDL_JOYSTICK_HIDAPI_PS4_REPORT_INTERVAL"
 
 /**
  * A variable controlling whether extended input reports should be used for
@@ -2548,22 +2586,6 @@ extern "C" {
 #define SDL_HINT_RENDER_METAL_PREFER_LOW_POWER_DEVICE "SDL_RENDER_METAL_PREFER_LOW_POWER_DEVICE"
 
 /**
- * A variable controlling whether vsync is automatically disabled if doesn't
- * reach enough FPS.
- *
- * The variable can be set to the following values:
- *
- * - "0": It will be using VSYNC as defined in the main flag. (default)
- * - "1": If VSYNC was previously enabled, then it will disable VSYNC if
- *   doesn't reach enough speed
- *
- * This hint should be set before creating a renderer.
- *
- * \since This hint is available since SDL 3.0.0.
- */
-#define SDL_HINT_RENDER_PS2_DYNAMIC_VSYNC    "SDL_RENDER_PS2_DYNAMIC_VSYNC"
-
-/**
  * A variable controlling whether updates to the SDL screen surface should be
  * synchronized with the vertical refresh, to avoid tearing.
  *
@@ -2609,6 +2631,8 @@ extern "C" {
  * This hint should be set before SDL is initialized.
  *
  * \since This hint is available since SDL 3.0.0.
+ *
+ * \sa SDL_HINT_ROG_GAMEPAD_MICE_EXCLUDED
  */
 #define SDL_HINT_ROG_GAMEPAD_MICE "SDL_ROG_GAMEPAD_MICE"
 
@@ -3087,6 +3111,8 @@ extern "C" {
 /**
  * A variable forcing non-DPI-aware Wayland windows to output at 1:1 scaling.
  *
+ * This must be set before initializing the video subsystem.
+ *
  * When this hint is set, Wayland windows that are not flagged as being
  * DPI-aware will be output with scaling designed to force 1:1 pixel mapping.
  *
@@ -3095,12 +3121,15 @@ extern "C" {
  * configurations, as this forces the window to behave in a way that Wayland
  * desktops were not designed to accommodate:
  *
- * - Rounding errors can result with odd window sizes and/or desktop scales.
- * - The window may be unusably small.
- * - The window may jump in size at times.
- * - The window may appear to be larger than the desktop size to the
- *   application.
- * - Possible loss of cursor precision.
+ * - Rounding errors can result with odd window sizes and/or desktop scales,
+ *   which can cause the window contents to appear slightly blurry.
+ * - The window may be unusably small on scaled desktops.
+ * - The window may jump in size when moving between displays of different
+ *   scale factors.
+ * - Displays may appear to overlap when using a multi-monitor setup with
+ *   scaling enabled.
+ * - Possible loss of cursor precision due to the logical size of the window
+ *   being reduced.
  *
  * New applications should be designed with proper DPI awareness handling
  * instead of enabling this.
@@ -3435,8 +3464,8 @@ extern "C" {
  *
  * The variable can be set to the following values:
  *
- * - "0": The Windows message loop is used for keyboard events.
- * - "1": Low latency raw keyboard events are used. (default)
+ * - "0": The Windows message loop is used for keyboard events. (default)
+ * - "1": Low latency raw keyboard events are used.
  *
  * This hint can be set anytime.
  *
@@ -3720,7 +3749,7 @@ typedef enum SDL_HintPriority
  * \sa SDL_ResetHint
  * \sa SDL_SetHint
  */
-extern DECLSPEC SDL_bool SDLCALL SDL_SetHintWithPriority(const char *name,
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_SetHintWithPriority(const char *name,
                                                          const char *value,
                                                          SDL_HintPriority priority);
 
@@ -3741,7 +3770,7 @@ extern DECLSPEC SDL_bool SDLCALL SDL_SetHintWithPriority(const char *name,
  * \sa SDL_ResetHint
  * \sa SDL_SetHintWithPriority
  */
-extern DECLSPEC SDL_bool SDLCALL SDL_SetHint(const char *name,
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_SetHint(const char *name,
                                              const char *value);
 
 /**
@@ -3759,7 +3788,7 @@ extern DECLSPEC SDL_bool SDLCALL SDL_SetHint(const char *name,
  * \sa SDL_SetHint
  * \sa SDL_ResetHints
  */
-extern DECLSPEC SDL_bool SDLCALL SDL_ResetHint(const char *name);
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_ResetHint(const char *name);
 
 /**
  * Reset all hints to the default values.
@@ -3772,10 +3801,12 @@ extern DECLSPEC SDL_bool SDLCALL SDL_ResetHint(const char *name);
  *
  * \sa SDL_ResetHint
  */
-extern DECLSPEC void SDLCALL SDL_ResetHints(void);
+extern SDL_DECLSPEC void SDLCALL SDL_ResetHints(void);
 
 /**
  * Get the value of a hint.
+ *
+ * The returned string follows the SDL_GetStringRule.
  *
  * \param name the hint to query
  * \returns the string value of a hint or NULL if the hint isn't set.
@@ -3785,7 +3816,7 @@ extern DECLSPEC void SDLCALL SDL_ResetHints(void);
  * \sa SDL_SetHint
  * \sa SDL_SetHintWithPriority
  */
-extern DECLSPEC const char * SDLCALL SDL_GetHint(const char *name);
+extern SDL_DECLSPEC const char * SDLCALL SDL_GetHint(const char *name);
 
 /**
  * Get the boolean value of a hint variable.
@@ -3800,7 +3831,7 @@ extern DECLSPEC const char * SDLCALL SDL_GetHint(const char *name);
  * \sa SDL_GetHint
  * \sa SDL_SetHint
  */
-extern DECLSPEC SDL_bool SDLCALL SDL_GetHintBoolean(const char *name, SDL_bool default_value);
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GetHintBoolean(const char *name, SDL_bool default_value);
 
 /**
  * Type definition of the hint callback function.
@@ -3824,11 +3855,14 @@ typedef void (SDLCALL *SDL_HintCallback)(void *userdata, const char *name, const
  * \returns 0 on success or a negative error code on failure; call
  *          SDL_GetError() for more information.
  *
+ * \threadsafety It is **NOT** safe to call this function from two threads at
+ *               once.
+ *
  * \since This function is available since SDL 3.0.0.
  *
  * \sa SDL_DelHintCallback
  */
-extern DECLSPEC int SDLCALL SDL_AddHintCallback(const char *name,
+extern SDL_DECLSPEC int SDLCALL SDL_AddHintCallback(const char *name,
                                                 SDL_HintCallback callback,
                                                 void *userdata);
 
@@ -3844,7 +3878,7 @@ extern DECLSPEC int SDLCALL SDL_AddHintCallback(const char *name,
  *
  * \sa SDL_AddHintCallback
  */
-extern DECLSPEC void SDLCALL SDL_DelHintCallback(const char *name,
+extern SDL_DECLSPEC void SDLCALL SDL_DelHintCallback(const char *name,
                                                  SDL_HintCallback callback,
                                                  void *userdata);
 

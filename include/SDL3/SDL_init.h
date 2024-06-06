@@ -20,10 +20,11 @@
 */
 
 /**
- *  \file SDL_init.h
+ * # CategoryInit
  *
- *  Init and quit header for the SDL library
+ * SDL subsystem init and quit functions.
  */
+
 
 #ifndef SDL_init_h_
 #define SDL_init_h_
@@ -84,7 +85,8 @@ typedef Uint32 SDL_InitFlags;
  * `flags` may be any of the following OR'd together:
  *
  * - `SDL_INIT_TIMER`: timer subsystem
- * - `SDL_INIT_AUDIO`: audio subsystem
+ * - `SDL_INIT_AUDIO`: audio subsystem; automatically initializes the events
+ *   subsystem
  * - `SDL_INIT_VIDEO`: video subsystem; automatically initializes the events
  *   subsystem
  * - `SDL_INIT_JOYSTICK`: joystick subsystem; automatically initializes the
@@ -93,7 +95,10 @@ typedef Uint32 SDL_InitFlags;
  * - `SDL_INIT_GAMEPAD`: gamepad subsystem; automatically initializes the
  *   joystick subsystem
  * - `SDL_INIT_EVENTS`: events subsystem
- * - `SDL_INIT_SENSOR`: sensor subsystem
+ * - `SDL_INIT_SENSOR`: sensor subsystem; automatically initializes the events
+ *   subsystem
+ * - `SDL_INIT_CAMERA`: camera subsystem; automatically initializes the events
+ *   subsystem
  *
  * Subsystem initialization is ref-counted, you must call SDL_QuitSubSystem()
  * for each SDL_InitSubSystem() to correctly shutdown a subsystem manually (or
@@ -111,7 +116,7 @@ typedef Uint32 SDL_InitFlags;
  * \sa SDL_SetMainReady
  * \sa SDL_WasInit
  */
-extern DECLSPEC int SDLCALL SDL_Init(SDL_InitFlags flags);
+extern SDL_DECLSPEC int SDLCALL SDL_Init(SDL_InitFlags flags);
 
 /**
  * Compatibility function to initialize the SDL library.
@@ -128,7 +133,7 @@ extern DECLSPEC int SDLCALL SDL_Init(SDL_InitFlags flags);
  * \sa SDL_Quit
  * \sa SDL_QuitSubSystem
  */
-extern DECLSPEC int SDLCALL SDL_InitSubSystem(SDL_InitFlags flags);
+extern SDL_DECLSPEC int SDLCALL SDL_InitSubSystem(SDL_InitFlags flags);
 
 /**
  * Shut down specific SDL subsystems.
@@ -143,7 +148,7 @@ extern DECLSPEC int SDLCALL SDL_InitSubSystem(SDL_InitFlags flags);
  * \sa SDL_InitSubSystem
  * \sa SDL_Quit
  */
-extern DECLSPEC void SDLCALL SDL_QuitSubSystem(SDL_InitFlags flags);
+extern SDL_DECLSPEC void SDLCALL SDL_QuitSubSystem(SDL_InitFlags flags);
 
 /**
  * Get a mask of the specified subsystems which are currently initialized.
@@ -157,7 +162,7 @@ extern DECLSPEC void SDLCALL SDL_QuitSubSystem(SDL_InitFlags flags);
  * \sa SDL_Init
  * \sa SDL_InitSubSystem
  */
-extern DECLSPEC SDL_InitFlags SDLCALL SDL_WasInit(SDL_InitFlags flags);
+extern SDL_DECLSPEC SDL_InitFlags SDLCALL SDL_WasInit(SDL_InitFlags flags);
 
 /**
  * Clean up all initialized subsystems.
@@ -175,7 +180,7 @@ extern DECLSPEC SDL_InitFlags SDLCALL SDL_WasInit(SDL_InitFlags flags);
  * \sa SDL_Init
  * \sa SDL_QuitSubSystem
  */
-extern DECLSPEC void SDLCALL SDL_Quit(void);
+extern SDL_DECLSPEC void SDLCALL SDL_Quit(void);
 
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus

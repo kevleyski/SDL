@@ -19,6 +19,12 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
+/**
+ * # CategoryDialog
+ *
+ * File dialog support.
+ */
+
 #ifndef SDL_dialog_h_
 #define SDL_dialog_h_
 
@@ -72,10 +78,9 @@ typedef struct SDL_DialogFileFilter
  * The filelist argument does not need to be freed; it will automatically be
  * freed when the callback returns.
  *
- * The filter argument is the index of the filter that was selected, or one
- * more than the size of the list (therefore the index of the terminating NULL
- * entry) if no filter was selected, or -1 if the platform or method doesn't
- * support fetching the selected filter.
+ * The filter argument is the index of the filter that was selected, or -1 if
+ * no filter was selected or if the platform or method doesn't support
+ * fetching the selected filter.
  *
  * \param userdata An app-provided pointer, for the callback's use.
  * \param filelist The file(s) chosen by the user.
@@ -108,6 +113,10 @@ typedef void(SDLCALL *SDL_DialogFileCallback)(void *userdata, const char * const
  * Depending on the platform, the user may be allowed to input paths that
  * don't yet exist.
  *
+ * On Linux, dialogs may require XDG Portals, which requires DBus, which
+ * requires an event-handling loop. Apps that do not use SDL to handle events
+ * should add a call to SDL_PumpEvents in their main loop.
+ *
  * \param callback An SDL_DialogFileCallback to be invoked when the user
  *                 selects a file and accepts, or cancels the dialog, or an
  *                 error occurs. The first argument is a null-terminated list
@@ -125,9 +134,10 @@ typedef void(SDLCALL *SDL_DialogFileCallback)(void *userdata, const char * const
  *                 it will be invoked.
  * \param window The window that the dialog should be modal for. May be NULL.
  *               Not all platforms support this option.
- * \param filters A null-terminated list of SDL_DialogFileFilter's. May be
- *                NULL. Not all platforms support this option, and platforms
- *                that do support it may allow the user to ignore the filters.
+ * \param filters A list of SDL_DialogFileFilter's. May be NULL. Not all
+ *                platforms support this option, and platforms that do support
+ *                it may allow the user to ignore the filters.
+ * \param nfilters The number of filters. Ignored if filters is NULL.
  * \param default_location The default folder or file to start the dialog at.
  *                         May be NULL. Not all platforms support this option.
  * \param allow_many If non-zero, the user will be allowed to select multiple
@@ -140,7 +150,7 @@ typedef void(SDLCALL *SDL_DialogFileCallback)(void *userdata, const char * const
  * \sa SDL_ShowSaveFileDialog
  * \sa SDL_ShowOpenFolderDialog
  */
-extern DECLSPEC void SDLCALL SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, const char *default_location, SDL_bool allow_many);
+extern SDL_DECLSPEC void SDLCALL SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, int nfilters, const char *default_location, SDL_bool allow_many);
 
 /**
  * Displays a dialog that lets the user choose a new or existing file on their
@@ -160,6 +170,10 @@ extern DECLSPEC void SDLCALL SDL_ShowOpenFileDialog(SDL_DialogFileCallback callb
  *
  * The chosen file may or may not already exist.
  *
+ * On Linux, dialogs may require XDG Portals, which requires DBus, which
+ * requires an event-handling loop. Apps that do not use SDL to handle events
+ * should add a call to SDL_PumpEvents in their main loop.
+ *
  * \param callback An SDL_DialogFileCallback to be invoked when the user
  *                 selects a file and accepts, or cancels the dialog, or an
  *                 error occurs. The first argument is a null-terminated list
@@ -177,9 +191,10 @@ extern DECLSPEC void SDLCALL SDL_ShowOpenFileDialog(SDL_DialogFileCallback callb
  *                 it will be invoked.
  * \param window The window that the dialog should be modal for. May be NULL.
  *               Not all platforms support this option.
- * \param filters A null-terminated list of SDL_DialogFileFilter's. May be
- *                NULL. Not all platforms support this option, and platforms
- *                that do support it may allow the user to ignore the filters.
+ * \param filters A list of SDL_DialogFileFilter's. May be NULL. Not all
+ *                platforms support this option, and platforms that do support
+ *                it may allow the user to ignore the filters.
+ * \param nfilters The number of filters. Ignored if filters is NULL.
  * \param default_location The default folder or file to start the dialog at.
  *                         May be NULL. Not all platforms support this option.
  *
@@ -190,7 +205,7 @@ extern DECLSPEC void SDLCALL SDL_ShowOpenFileDialog(SDL_DialogFileCallback callb
  * \sa SDL_ShowOpenFileDialog
  * \sa SDL_ShowOpenFolderDialog
  */
-extern DECLSPEC void SDLCALL SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, const char *default_location);
+extern SDL_DECLSPEC void SDLCALL SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, int nfilters, const char *default_location);
 
 /**
  * Displays a dialog that lets the user select a folder on their filesystem.
@@ -209,6 +224,10 @@ extern DECLSPEC void SDLCALL SDL_ShowSaveFileDialog(SDL_DialogFileCallback callb
  *
  * Depending on the platform, the user may be allowed to input paths that
  * don't yet exist.
+ *
+ * On Linux, dialogs may require XDG Portals, which requires DBus, which
+ * requires an event-handling loop. Apps that do not use SDL to handle events
+ * should add a call to SDL_PumpEvents in their main loop.
  *
  * \param callback An SDL_DialogFileCallback to be invoked when the user
  *                 selects a file and accepts, or cancels the dialog, or an
@@ -234,7 +253,7 @@ extern DECLSPEC void SDLCALL SDL_ShowSaveFileDialog(SDL_DialogFileCallback callb
  * \sa SDL_ShowOpenFileDialog
  * \sa SDL_ShowSaveFileDialog
  */
-extern DECLSPEC void SDLCALL SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const char *default_location, SDL_bool allow_many);
+extern SDL_DECLSPEC void SDLCALL SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const char *default_location, SDL_bool allow_many);
 
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus

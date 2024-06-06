@@ -111,7 +111,6 @@ static SDL_bool verbose;
 static SDL_bool CreateWindowAndRenderer(SDL_WindowFlags window_flags, const char *driver)
 {
     SDL_PropertiesID props;
-    SDL_RendererInfo info;
     SDL_bool useOpenGL = (driver && (SDL_strcmp(driver, "opengl") == 0 || SDL_strcmp(driver, "opengles2") == 0));
     SDL_bool useEGL = (driver && SDL_strcmp(driver, "opengles2") == 0);
     SDL_bool useVulkan = (driver && SDL_strcmp(driver, "vulkan") == 0);
@@ -177,9 +176,7 @@ static SDL_bool CreateWindowAndRenderer(SDL_WindowFlags window_flags, const char
         return SDL_FALSE;
     }
 
-    if (SDL_GetRendererInfo(renderer, &info) == 0) {
-        SDL_Log("Created renderer %s\n", info.name);
-    }
+    SDL_Log("Created renderer %s\n", SDL_GetRendererName(renderer));
 
 #ifdef HAVE_EGL
     if (useEGL) {
@@ -291,11 +288,11 @@ static SDL_PixelFormatEnum GetTextureFormat(enum AVPixelFormat format)
     case AV_PIX_FMT_RGB8:
         return SDL_PIXELFORMAT_RGB332;
     case AV_PIX_FMT_RGB444:
-        return SDL_PIXELFORMAT_RGB444;
+        return SDL_PIXELFORMAT_XRGB4444;
     case AV_PIX_FMT_RGB555:
-        return SDL_PIXELFORMAT_RGB555;
+        return SDL_PIXELFORMAT_XRGB1555;
     case AV_PIX_FMT_BGR555:
-        return SDL_PIXELFORMAT_BGR555;
+        return SDL_PIXELFORMAT_XBGR1555;
     case AV_PIX_FMT_RGB565:
         return SDL_PIXELFORMAT_RGB565;
     case AV_PIX_FMT_BGR565:
@@ -1323,7 +1320,7 @@ int main(int argc, char *argv[])
     state = SDLTest_CommonCreateState(argv, 0);
 
     /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
+    SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     /* Log ffmpeg messages */
     av_log_set_callback( av_log_callback );
@@ -1492,7 +1489,7 @@ int main(int argc, char *argv[])
         positions[i].h = (float)sprite_h;
         velocities[i].x = 0.0f;
         velocities[i].y = 0.0f;
-        while (!velocities[i].x || !velocities[i].y) {
+        while (velocities[i].x == 0.f || velocities[i].y == 0.f) {
             velocities[i].x = (float)((rand() % (2 + 1)) - 1);
             velocities[i].y = (float)((rand() % (2 + 1)) - 1);
         }

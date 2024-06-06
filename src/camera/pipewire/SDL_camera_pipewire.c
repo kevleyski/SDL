@@ -621,8 +621,9 @@ static void collect_rates(CameraFormatAddData *data, struct param *p, const Uint
 	SPA_FALLTHROUGH;
     case SPA_CHOICE_Enum:
 	for (i = 0; i < n_vals; i++) {
+            // denom and num are switched, because SDL expects an interval, while pw provides a rate
             if (SDL_AddCameraFormat(data, sdlfmt, size->width, size->height,
-				    rates[i].num, rates[i].denom) == -1) {
+				    rates[i].denom, rates[i].num) == -1) {
                 return;  // Probably out of memory; we'll go with what we have, if anything.
             }
 	}
@@ -1016,12 +1017,6 @@ static int hotplug_loop_init(void)
         PIPEWIRE_pw_thread_loop_wait(hotplug.loop);
     }
     PIPEWIRE_pw_thread_loop_unlock(hotplug.loop);
-
-    SDL_Log("CAMERA: PipeWire compiled:%s library:%s server:%d.%d.%d required:%d.%d.%d",
-		    pw_get_headers_version(),
-		    PIPEWIRE_pw_get_library_version(),
-		    hotplug.server_major, hotplug.server_minor, hotplug.server_patch,
-                    PW_REQUIRED_MAJOR, PW_REQUIRED_MINOR, PW_REQUIRED_PATCH);
 
     if (!pipewire_server_version_at_least(PW_REQUIRED_MAJOR, PW_REQUIRED_MINOR, PW_REQUIRED_PATCH)) {
         return SDL_SetError("Pipewire: server version is too old %d.%d.%d < %d.%d.%d",

@@ -185,10 +185,8 @@ static int VITA_GXM_SetVSync(SDL_Renderer *renderer, const int vsync)
     VITA_GXM_RenderData *data = renderer->driverdata;
     if (vsync) {
         data->displayData.wait_vblank = SDL_TRUE;
-        renderer->info.flags |= SDL_RENDERER_PRESENTVSYNC;
     } else {
         data->displayData.wait_vblank = SDL_FALSE;
-        renderer->info.flags &= ~SDL_RENDERER_PRESENTVSYNC;
     }
     return 0;
 }
@@ -237,7 +235,7 @@ static int VITA_GXM_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, S
     VITA_GXM_InvalidateCachedState(renderer);
     renderer->window = window;
 
-    renderer->info.name = VITA_GXM_RenderDriver.name;
+    renderer->name = VITA_GXM_RenderDriver.name;
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_ABGR8888);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_ARGB8888);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_RGB565);
@@ -246,17 +244,9 @@ static int VITA_GXM_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, S
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_IYUV);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_NV12);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_NV21);
-    renderer->info.max_texture_width = 4096;
-    renderer->info.max_texture_height = 4096;
+    SDL_SetNumberProperty(SDL_GetRendererProperties(renderer), SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 4096);
 
     data->initialized = SDL_TRUE;
-
-    if (SDL_GetBooleanProperty(create_props, SDL_PROP_RENDERER_CREATE_PRESENT_VSYNC_BOOLEAN, SDL_FALSE)) {
-        data->displayData.wait_vblank = SDL_TRUE;
-        renderer->info.flags |= SDL_RENDERER_PRESENTVSYNC;
-    } else {
-        data->displayData.wait_vblank = SDL_FALSE;
-    }
 
 #ifdef DEBUG_RAZOR
     sceSysmoduleLoadModule(SCE_SYSMODULE_RAZOR_HUD);
@@ -848,8 +838,8 @@ static int SetDrawState(VITA_GXM_RenderData *data, const SDL_RenderCommand *cmd)
     if (data->drawstate.viewport_dirty) {
         const SDL_Rect *viewport = &data->drawstate.viewport;
 
-        float sw = viewport->w / 2.;
-        float sh = viewport->h / 2.;
+        float sw = viewport->w / 2.f;
+        float sh = viewport->h / 2.f;
 
         float x_scale = sw;
         float x_off = viewport->x + sw;
