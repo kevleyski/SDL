@@ -1614,9 +1614,9 @@ static int Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL
 
 - (void)resetCursorRects
 {
-    [super resetCursorRects];
-    [self addCursorRect:[self bounds]
-                 cursor:Cocoa_GetDesiredCursor()];
+//    [super resetCursorRects];
+//    [self addCursorRect:[self bounds]
+//                 cursor:Cocoa_GetDesiredCursor()];
 }
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)theEvent
