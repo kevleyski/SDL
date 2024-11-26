@@ -1614,9 +1614,12 @@ static int Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL
 
 - (void)resetCursorRects
 {
+    /* KJSL: temp workaround for crash on Intel MacOS Sequioa 15.1.1 (24B91)
+
 //    [super resetCursorRects];
 //    [self addCursorRect:[self bounds]
 //                 cursor:Cocoa_GetDesiredCursor()];
+     */
 }
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)theEvent

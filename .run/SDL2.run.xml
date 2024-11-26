@@ -2,9 +2,4 @@
   <configuration default="false" name="SDL2" type="CMakeListConfigurationType" factoryName="CMakeListConfigurationFactory">
     <method v="2" />
   </configuration>
-  <configuration default="false" name="SDL2" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SDL2" TARGET_NAME="SDL2" CONFIG_NAME="Debug">
-    <method v="2">
-      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-    </method>
-  </configuration>
 </component>

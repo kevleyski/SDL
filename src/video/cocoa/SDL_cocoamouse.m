@@ -40,23 +40,38 @@
 + (NSCursor *)invisibleCursor
 {
     static NSCursor *invisibleCursor = NULL;
-    if (!invisibleCursor) {
-        /* RAW 16x16 transparent GIF */
-        static unsigned char cursorBytes[] = {
-            0x47, 0x49, 0x46, 0x38, 0x37, 0x61, 0x10, 0x00, 0x10, 0x00, 0x80,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0xF9, 0x04,
-            0x01, 0x00, 0x00, 0x01, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x10,
-            0x00, 0x10, 0x00, 0x00, 0x02, 0x0E, 0x8C, 0x8F, 0xA9, 0xCB, 0xED,
-            0x0F, 0xA3, 0x9C, 0xB4, 0xDA, 0x8B, 0xB3, 0x3E, 0x05, 0x00, 0x3B
-        };
 
-        NSData *cursorData = [NSData dataWithBytesNoCopy:&cursorBytes[0]
-                                                  length:sizeof(cursorBytes)
-                                            freeWhenDone:NO];
-        NSImage *cursorImage = [[NSImage alloc] initWithData:cursorData];
-        invisibleCursor = [[NSCursor alloc] initWithImage:cursorImage
-                                                  hotSpot:NSZeroPoint];
-    }
+/* KJSL: temp workaround for crash on Intel MacOS Sequioa 15.1.1 (24B91)
+    Thread 0 Crashed::  Dispatch queue: com.apple.main-thread
+    0   ???                           	         0xbad4007 ???
+    1   ImageIO                       	    0x7ff81b60f805 IIO_Reader_GIF::parse(IIOImageReadSession*, IIODictionary*, CGImageSourceStatus*, unsigned int*, IIODictionary*) + 127
+    2   ImageIO                       	    0x7ff81b68ffae IIO_Reader::callGetImageCount(CGImageReadSession*, IIODictionary*, CGImageSourceStatus*, int*) + 582
+    3   ImageIO                       	    0x7ff81b545577 IIOImageSource::updatedCount() + 305
+    4   ImageIO                       	    0x7ff81b54ec47 CGImageSourceGetCount + 214
+    5   AppKit                        	    0x7ff81360e2cb +[NSBitmapImageRep _imagesWithData:hfsFileType:extension:zone:expandImageContentNow:includeAllReps:] + 353
+    6   AppKit                        	    0x7ff813751a36 +[NSBitmapImageRep imageRepsWithData:] + 69
+    7   AppKit                        	    0x7ff813751224 -[NSImage initWithData:] + 93
+    8   libSDL2-2.0.0.dylib           	       0x1066295ed +[NSCursor(InvisibleCursor) invisibleCursor] + 109
+    9   libSDL2-2.0.0.dylib           	       0x106635f47 Cocoa_GetDesiredCursor + 119
+    */
+
+//    if (!invisibleCursor) {
+//        /* RAW 16x16 transparent GIF */
+//        static unsigned char cursorBytes[] = {
+//            0x47, 0x49, 0x46, 0x38, 0x37, 0x61, 0x10, 0x00, 0x10, 0x00, 0x80,
+//            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0xF9, 0x04,
+//            0x01, 0x00, 0x00, 0x01, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x10,
+//            0x00, 0x10, 0x00, 0x00, 0x02, 0x0E, 0x8C, 0x8F, 0xA9, 0xCB, 0xED,
+//            0x0F, 0xA3, 0x9C, 0xB4, 0xDA, 0x8B, 0xB3, 0x3E, 0x05, 0x00, 0x3B
+//        };
+//
+//        NSData *cursorData = [NSData dataWithBytesNoCopy:&cursorBytes[0]
+//                                                  length:sizeof(cursorBytes)
+//                                            freeWhenDone:NO];
+//        NSImage *cursorImage = [[NSImage alloc] initWithData:cursorData];
+//        invisibleCursor = [[NSCursor alloc] initWithImage:cursorImage
+//                                                  hotSpot:NSZeroPoint];
+//    }
 
     return invisibleCursor;
 }
