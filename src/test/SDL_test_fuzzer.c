@@ -24,10 +24,26 @@
   Data generators for fuzzing test data in a reproducible way.
 
 */
-#include <SDL3/SDL_test.h>
 
-#include <float.h>  /* Needed for FLT_MAX and DBL_EPSILON */
-#include <limits.h> /* Needed for UCHAR_MAX, etc. */
+#include "SDL_config.h"
+
+#include <limits.h>
+/* Visual Studio 2008 doesn't have stdint.h */
+#if defined(_MSC_VER) && _MSC_VER <= 1500
+#define UINT8_MAX   _UI8_MAX
+#define UINT16_MAX  _UI16_MAX
+#define UINT32_MAX  _UI32_MAX
+#define INT64_MIN    _I64_MIN
+#define INT64_MAX    _I64_MAX
+#define UINT64_MAX  _UI64_MAX
+#else
+#include <stdint.h>
+#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <float.h>
+
+#include "SDL_test.h"
 
 /**
  * Counter for fuzzer invocations
@@ -149,12 +165,12 @@ Sint32 SDLTest_RandomIntegerInRange(Sint32 pMin, Sint32 pMax)
     }
 
     number = SDLTest_RandomUint32();
-    /* invocation count increment in preceding call */
+    /* invocation count increment in preceeding call */
 
     return (Sint32)((number % ((max + 1) - min)) + min);
 }
 
-/**
+/* !
  * Generates a unsigned boundary value between the given boundaries.
  * Boundary values are inclusive. See the examples below.
  * If boundary2 < boundary1, the values are swapped.
@@ -278,7 +294,7 @@ Uint64 SDLTest_RandomUint64BoundaryValue(Uint64 boundary1, Uint64 boundary2, SDL
                                                   validDomain);
 }
 
-/**
+/* !
  * Generates a signed boundary value between the given boundaries.
  * Boundary values are inclusive. See the examples below.
  * If boundary2 < boundary1, the values are swapped.
@@ -486,3 +502,5 @@ char *SDLTest_RandomAsciiStringOfSize(int size)
 
     return string;
 }
+
+/* vi: set ts=4 sw=4 expandtab: */

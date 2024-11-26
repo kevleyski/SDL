@@ -18,11 +18,13 @@
      misrepresented as being the original software.
   3. This notice may not be removed or altered from any source distribution.
 */
-#include "SDL_internal.h"
+#include "../../SDL_internal.h"
 
 #if SDL_VIDEO_RENDER_VITA_GXM
 
+#include "SDL_hints.h"
 #include "../SDL_sysrender.h"
+#include "SDL_log.h"
 
 #include <psp2/kernel/processmgr.h>
 #include <psp2/appmgr.h>
@@ -526,7 +528,7 @@ int gxm_init(SDL_Renderer *renderer)
     // set the stencil test reference (this is currently assumed to always remain 1 after here for region clipping)
     sceGxmSetFrontStencilRef(data->gxm_context, 1);
 
-    // set the stencil function (this wouldn't actually be needed, as the set clip rectangle function has to call this at the beginning of every scene)
+    // set the stencil function (this wouldn't actually be needed, as the set clip rectangle function has to call this at the begginning of every scene)
     sceGxmSetFrontStencilFunc(
         data->gxm_context,
         SCE_GXM_STENCIL_FUNC_ALWAYS,
@@ -1160,7 +1162,7 @@ void gxm_init_for_common_dialog(void)
     for (int i = 0; i < VITA_GXM_BUFFERS; i += 1) {
         buffer_for_common_dialog[i].displayData.wait_vblank = SDL_TRUE;
         buffer_for_common_dialog[i].displayData.address = vita_mem_alloc(
-            SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,
+            SCE_KERNEL_MEMBLOCK_TYPE_USER_MAIN_PHYCONT_NC_RW,
             4 * VITA_GXM_SCREEN_STRIDE * VITA_GXM_SCREEN_HEIGHT,
             SCE_GXM_COLOR_SURFACE_ALIGNMENT,
             SCE_GXM_MEMORY_ATTRIB_READ | SCE_GXM_MEMORY_ATTRIB_WRITE,
@@ -1211,3 +1213,5 @@ void gxm_term_for_common_dialog(void)
 }
 
 #endif /* SDL_VIDEO_RENDER_VITA_GXM */
+
+/* vi: set ts=4 sw=4 expandtab: */

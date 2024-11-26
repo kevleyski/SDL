@@ -39,7 +39,7 @@ jobs:
           python build-scripts/build-release.py \
             --create source \
             --commit ${{ inputs.commit }} \
-            --project SDL3 \
+            --project SDL2 \
             --root "${{ github.workspace }}/SDL" \
             --github \
             --debug
@@ -78,9 +78,9 @@ jobs:
         shell: bash
         run: |
           ${{ steps.tar.outputs.path }}/build-scripts/test-versioning.sh
-      - name: 'CMake (configure + build + tests)'
+      - name: 'CMake (configure + build + tests + examples)'
         run: |
-          cmake -S ${{ steps.tar.outputs.path }} -B /tmp/build -DSDL_TEST_LIBRARY=TRUE -DSDL_TESTS=TRUE
+          cmake -S ${{ steps.tar.outputs.path }} -B /tmp/build -DSDL_TEST_LIBRARY=TRUE -DSDL_TESTS=TRUE -DSDL_EXAMPLES=TRUE
           cmake --build /tmp/build --verbose
           ctest --test-dir /tmp/build --no-tests=error --output-on-failure
 
@@ -109,14 +109,14 @@ jobs:
           mkdir -p "${{ github.workspace }}/tardir"
           tar -C "${{ github.workspace }}/tardir" -v -x -f "${{ github.workspace }}/${{ needs.src.outputs.src-tar-gz }}"
           echo "path=${{ github.workspace }}/tardir/${{ needs.src.outputs.project }}-${{ needs.src.outputs.version }}" >>$GITHUB_OUTPUT
-      - name: 'Build SDL3.dmg'
+      - name: 'Build SDL2.dmg'
         id: releaser
         shell: bash
         run: |
           python build-scripts/build-release.py \
-            --create xcframework \
+            --create framework \
             --commit ${{ inputs.commit }} \
-            --project SDL3 \
+            --project SDL2 \
             --root "${{ steps.tar.outputs.path }}" \
             --github \
             --debug
@@ -151,13 +151,14 @@ jobs:
         run: |
           hdiutil attach '${{ github.workspace }}/${{ needs.dmg.outputs.dmg }}'
           mount_point="/Volumes/${{ needs.src.outputs.project }}"
-          if [ ! -d "$mount_point/${{ needs.src.outputs.project }}.xcframework" ]; then
-            echo "Cannot find ${{ needs.src.outputs.project }}.xcframework!"
+          if [ ! -d "$mount_point/${{ needs.src.outputs.project }}.framework" ]; then
+            echo "Cannot find ${{ needs.src.outputs.project }}.framework!"
             exit 1
           fi
           echo "mount_point=$mount_point">>$GITHUB_OUTPUT
       - name: 'CMake (configure + build) Darwin'
         run: |
+          set -e
           cmake -S "${{ steps.src.outputs.path }}/cmake/test"               \
               -DTEST_FULL=FALSE                                             \
               -DTEST_STATIC=FALSE                                           \
@@ -169,70 +170,16 @@ jobs:
               -B build_darwin
           cmake --build build_darwin --config Release --verbose
 
-          cmake -S "${{ steps.src.outputs.path }}/cmake/test"                                                   \
-              -DTEST_FULL=FALSE                                                                                 \
-              -DTEST_STATIC=FALSE                                                                               \
-              -DTEST_TEST=FALSE                                                                                 \
-              -DCMAKE_PREFIX_PATH="${{ steps.mount.outputs.mount_point }}/SDL3.xcframework/macos-arm64_x86_64"  \
-              -DCMAKE_SYSTEM_NAME=Darwin                                                                        \
-              -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"                                                          \
-              -Werror=dev                                                                                       \
+          cmake -S "${{ steps.src.outputs.path }}/cmake/test"               \
+              -DTEST_FULL=FALSE                                             \
+              -DTEST_STATIC=FALSE                                           \
+              -DTEST_TEST=FALSE                                             \
+              -DCMAKE_PREFIX_PATH="${{ steps.mount.outputs.mount_point }}"  \
+              -DCMAKE_SYSTEM_NAME=Darwin                                    \
+              -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"                      \
+              -Werror=dev                                                   \
               -B build_darwin_2
           cmake --build build_darwin --config Release --verbose
-      - name: 'CMake (configure + build) iOS'
-        run: |
-          cmake -S "${{ steps.src.outputs.path }}/cmake/test"               \
-              -DTEST_FULL=FALSE                                             \
-              -DTEST_STATIC=FALSE                                           \
-              -DTEST_TEST=FALSE                                             \
-              -DCMAKE_PREFIX_PATH="${{ steps.mount.outputs.mount_point }}"  \
-              -DCMAKE_SYSTEM_NAME=iOS                                       \
-              -DCMAKE_OSX_ARCHITECTURES="arm64"                             \
-              -Werror=dev                                                   \
-              -B build_ios
-          cmake --build build_ios --config Release --verbose
-      - name: 'CMake (configure + build) tvOS'
-        run: |
-          cmake -S "${{ steps.src.outputs.path }}/cmake/test"               \
-              -DTEST_FULL=FALSE                                             \
-              -DTEST_STATIC=FALSE                                           \
-              -DTEST_TEST=FALSE                                             \
-              -DCMAKE_PREFIX_PATH="${{ steps.mount.outputs.mount_point }}"  \
-              -DCMAKE_SYSTEM_NAME=tvOS                                      \
-              -DCMAKE_OSX_ARCHITECTURES="arm64"                             \
-              -Werror=dev                                                   \
-              -B build_tvos
-          cmake --build build_tvos --config Release --verbose
-      - name: 'CMake (configure + build) iOS simulator'
-        run: |
-          sysroot=$(xcodebuild -version -sdk iphonesimulator Path)
-          echo "sysroot=$sysroot"
-          cmake -S "${{ steps.src.outputs.path }}/cmake/test"               \
-              -DTEST_FULL=FALSE                                             \
-              -DTEST_STATIC=FALSE                                           \
-              -DTEST_TEST=FALSE                                             \
-              -DCMAKE_PREFIX_PATH="${{ steps.mount.outputs.mount_point }}"  \
-              -DCMAKE_SYSTEM_NAME=iOS                                       \
-              -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"                      \
-              -DCMAKE_OSX_SYSROOT="${sysroot}"                              \
-              -Werror=dev                                                   \
-              -B build_ios_simulator
-          cmake --build build_ios_simulator --config Release --verbose
-      - name: 'CMake (configure + build) tvOS simulator'
-        run: |
-          sysroot=$(xcodebuild -version -sdk appletvsimulator Path)
-          echo "sysroot=$sysroot"
-          cmake -S "${{ steps.src.outputs.path }}/cmake/test"               \
-              -DTEST_FULL=FALSE                                             \
-              -DTEST_STATIC=FALSE                                           \
-              -DTEST_TEST=FALSE                                             \
-              -DCMAKE_PREFIX_PATH="${{ steps.mount.outputs.mount_point }}"  \
-              -DCMAKE_SYSTEM_NAME=tvOS                                      \
-              -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"                      \
-              -DCMAKE_OSX_SYSROOT="${sysroot}"                              \
-              -Werror=dev                                                   \
-              -B build_tvos_simulator
-          cmake --build build_tvos_simulator --config Release --verbose
 
   msvc:
     needs: [src]
@@ -268,7 +215,7 @@ jobs:
           python build-scripts/build-release.py     `
             --create win32                          `
             --commit ${{ inputs.commit }}           `
-            --project SDL3                          `
+            --project SDL2                          `
             --root "${{ steps.zip.outputs.path }}"  `
             --github                                `
             --debug
@@ -282,6 +229,10 @@ jobs:
     needs: [msvc, src]
     runs-on: windows-latest
     steps:
+      - name: 'Fetch .github/actions/setup-ninja/action.yml'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: '.github/actions/setup-ninja/action.yml'
       - name: 'Download source archives'
         uses: actions/download-artifact@v4
         with:
@@ -306,41 +257,48 @@ jobs:
           cd '${{ github.workspace }}/vc'
           unzip "${{ github.workspace }}/${{ needs.msvc.outputs.VC-devel }}"
           echo "path=${{ github.workspace }}/vc/${{ needs.src.outputs.project }}-${{ needs.src.outputs.version }}" >>$env:GITHUB_OUTPUT
+      - name: Set up ninja
+        uses: ./.github/actions/setup-ninja
+      - name: 'Configure vcvars x86'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64_x86
       - name: 'CMake (configure + build + tests) x86'
         run: |
-          $env:PATH += ";${{ steps.bin.outputs.path }}/x86"
           cmake -S "${{ steps.src.outputs.path }}/cmake/test"     `
-              -DTEST_FULL=TRUE                                    `
-              -DTEST_STATIC=FALSE                                 `
-              -DTEST_TEST=TRUE                                    `
-              -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}" `
+              -B build_x86                                        `
+              -GNinja                                             `
+              -DCMAKE_BUILD_TYPE=Debug                            `
               -Werror=dev                                         `
-              -B build_x86 -A win32
+              -DTEST_FULL=FALSE                                   `
+              -DTEST_STATIC=FALSE                                 `
+              -DTEST_SHARED=TRUE                                  `
+              -DTEST_TEST=TRUE                                    `
+              -DCMAKE_SUPPRESS_REGENERATION=TRUE                  `
+              -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}"
+          Start-Sleep -Seconds 2
           cmake --build build_x86 --config Release --verbose
-          ctest --test-dir build_x86 --no-tests=error -C Release --output-on-failure
+          #ctest --test-dir build_x86 --no-tests=error -C Release --output-on-failure
+      - name: 'Configure vcvars x64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - name: 'CMake (configure + build + tests) x64'
         run: |
-          $env:PATH += ";${{ steps.bin.outputs.path }}/x86"
           cmake -S "${{ steps.src.outputs.path }}/cmake/test"     `
-              -DTEST_FULL=TRUE                                    `
-              -DTEST_STATIC=FALSE                                 `
-              -DTEST_TEST=TRUE                                    `
-              -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}" `
+              -B build_x64                                        `
+              -GNinja                                             `
+              -DCMAKE_BUILD_TYPE=Debug                            `
               -Werror=dev                                         `
-              -B build_x64 -A x64
+              -DTEST_FULL=FALSE                                   `
+              -DTEST_STATIC=FALSE                                 `
+              -DTEST_SHARED=TRUE                                  `
+              -DTEST_TEST=TRUE                                    `
+              -DCMAKE_SUPPRESS_REGENERATION=TRUE                  `
+              -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}"
+          Start-Sleep -Seconds 2
           cmake --build build_x64 --config Release --verbose
-          ctest --test-dir build_x64 --no-tests=error -C Release --output-on-failure
-      - name: 'CMake (configure + build) arm64'
-        run: |
-          $env:PATH += ";${{ steps.bin.outputs.path }}/x86"
-          cmake -S "${{ steps.src.outputs.path }}/cmake/test"     `
-              -DTEST_FULL=TRUE                                    `
-              -DTEST_STATIC=FALSE                                 `
-              -DTEST_TEST=TRUE                                    `
-              -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}" `
-              -Werror=dev                                         `
-              -B build_arm64 -A ARM64
-          cmake --build build_arm64 --config Release --verbose
+          #ctest --test-dir build_x64 --no-tests=error -C Release --output-on-failure
 
   mingw:
     needs: [src]
@@ -378,7 +336,7 @@ jobs:
           python build-scripts/build-release.py     \
             --create mingw                          \
             --commit ${{ inputs.commit }}           \
-            --project SDL3                          \
+            --project SDL2                          \
             --root "${{ steps.tar.outputs.path }}"  \
             --github                                \
             --debug
@@ -420,9 +378,10 @@ jobs:
           echo "path=/tmp/mingw-tardir/${{ needs.src.outputs.project }}-${{ needs.src.outputs.version }}" >>$GITHUB_OUTPUT
       - name: 'CMake (configure + build) i686'
         run: |
+          set -e
           cmake -S "${{ steps.src.outputs.path }}/cmake/test"                                                           \
               -DCMAKE_BUILD_TYPE="Release"                                                                              \
-              -DTEST_FULL=TRUE                                                                                          \
+              -DTEST_FULL=FALSE                                                                                         \
               -DTEST_STATIC=TRUE                                                                                        \
               -DTEST_TEST=TRUE                                                                                          \
               -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}"                                                       \
@@ -433,9 +392,10 @@ jobs:
           cmake --build build_x86 --config Release --verbose
       - name: 'CMake (configure + build) x86_64'
         run: |
+          set -e
           cmake -S "${{ steps.src.outputs.path }}/cmake/test"                                                           \
               -DCMAKE_BUILD_TYPE="Release"                                                                              \
-              -DTEST_FULL=TRUE                                                                                          \
+              -DTEST_FULL=FALSE                                                                                         \
               -DTEST_STATIC=TRUE                                                                                        \
               -DTEST_TEST=TRUE                                                                                          \
               -DCMAKE_PREFIX_PATH="${{ steps.bin.outputs.path }}"                                                       \
@@ -444,59 +404,3 @@ jobs:
               -Werror=dev                                                                                               \
               -B build_x64
           cmake --build build_x64 --config Release --verbose
-
-  android:
-    needs: [src]
-    runs-on: ubuntu-latest
-    outputs:
-      android-aar: ${{ steps.releaser.outputs.android-aar }}
-    steps:
-      - name: 'Set up Python'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - name: 'Fetch build-release.py'
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: 'build-scripts/build-release.py'
-      - name: 'Setup Android NDK'
-        uses: nttld/setup-ndk@v1
-        id: setup_ndk
-        with:
-          local-cache: true
-          ndk-version: r21e
-      - name: 'Setup Java JDK'
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '11'
-      - name: 'Install ninja'
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y ninja-build
-      - name: 'Download source archives'
-        uses: actions/download-artifact@v4
-        with:
-          name: sources
-          path: '${{ github.workspace }}'
-      - name: 'Untar ${{ needs.src.outputs.src-tar-gz }}'
-        id: tar
-        run: |
-          mkdir -p /tmp/tardir
-          tar -C /tmp/tardir -v -x -f "${{ github.workspace }}/${{ needs.src.outputs.src-tar-gz }}"
-          echo "path=/tmp/tardir/${{ needs.src.outputs.project }}-${{ needs.src.outputs.version }}" >>$GITHUB_OUTPUT
-      - name: 'Build Android prefab binary archive(s)'
-        id: releaser
-        run: |
-          python build-scripts/build-release.py     \
-            --create android                        \
-            --commit ${{ inputs.commit }}           \
-            --project SDL3                          \
-            --root "${{ steps.tar.outputs.path }}"  \
-            --github                                \
-            --debug
-      - name: 'Store Android archive(s)'
-        uses: actions/upload-artifact@v4
-        with:
-          name: android
-          path: '${{ github.workspace }}/dist'

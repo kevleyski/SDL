@@ -24,7 +24,7 @@ import zipfile
 logger = logging.getLogger(__name__)
 
 
-VcArchDevel = collections.namedtuple("VcArchDevel", ("dll", "pdb", "imp", "test"))
+VcArchDevel = collections.namedtuple("VcArchDevel", ("dll", "pdb", "imp", "main", "test"))
 GIT_HASH_FILENAME = ".git-hash"
 
 ANDROID_AVAILABLE_ABIS = [
@@ -36,14 +36,6 @@ ANDROID_AVAILABLE_ABIS = [
 ANDROID_MINIMUM_API = 19
 ANDROID_TARGET_API = 29
 ANDROID_MINIMUM_NDK = 21
-ANDROID_LIBRARIES = [
-    "dl",
-    "GLESv1_CM",
-    "GLESv2",
-    "log",
-    "android",
-    "OpenSLES",
-]
 
 
 class Executer:
@@ -90,7 +82,7 @@ class VisualStudio:
         self.msbuild = self.find_msbuild()
 
     @property
-    def dry(self):
+    def dry(self) -> bool:
         return self.executer.dry
 
     VS_YEAR_TO_VERSION = {
@@ -105,7 +97,7 @@ class VisualStudio:
         vswhere_spec = ["-latest"]
         if year is not None:
             try:
-                version = cls.VS_YEAR_TO_VERSION[year]
+                version = self.VS_YEAR_TO_VERSION[year]
             except KeyError:
                 logger.error("Invalid Visual Studio year")
                 return None
@@ -123,7 +115,7 @@ class VisualStudio:
         return vsdevcmd_path
 
     def find_msbuild(self) -> typing.Optional[Path]:
-        vswhere_cmd = ["vswhere", "-latest", "-requires", "Microsoft.Component.MSBuild", "-find", "MSBuild\**\Bin\MSBuild.exe"]
+        vswhere_cmd = ["vswhere", "-latest", "-requires", "Microsoft.Component.MSBuild", "-find", r"MSBuild\**\Bin\MSBuild.exe"]
         msbuild_path = Path(self.executer.run(vswhere_cmd, stdout=True, dry_out="/tmp/MSBuild.exe").stdout.strip())
         logger.info("MSBuild path = %s", msbuild_path)
         if self.dry:
@@ -158,10 +150,10 @@ class Releaser:
         self.executer = executer
         self.cmake_generator = cmake_generator
 
-        self.artifacts = {}
+        self.artifacts: dict[str, Path] = {}
 
     @property
-    def dry(self):
+    def dry(self) -> bool:
         return self.executer.dry
 
     def prepare(self):
@@ -169,7 +161,7 @@ class Releaser:
         self.dist_path.mkdir(parents=True, exist_ok=True)
 
     TreeItem = collections.namedtuple("TreeItem", ("path", "mode", "data", "time"))
-    def _get_file_times(self, paths: tuple[str]) -> dict[str, datetime.datetime]:
+    def _get_file_times(self, paths: tuple[str, ...]) -> dict[str, datetime.datetime]:
         dry_out = textwrap.dedent("""\
             time=2024-03-14T15:40:25-07:00
 
@@ -178,18 +170,18 @@ class Releaser:
         git_log_out = self.executer.run(["git", "log", "--name-status", '--pretty=time=%cI', self.commit], stdout=True, dry_out=dry_out).stdout.splitlines(keepends=False)
         current_time = None
         set_paths = set(paths)
-        path_times = {}
+        path_times: dict[str, datetime.datetime] = {}
         for line in git_log_out:
             if not line:
                 continue
             if line.startswith("time="):
                 current_time = datetime.datetime.fromisoformat(line.removeprefix("time="))
                 continue
-            mod_type, paths = line.split(maxsplit=1)
+            mod_type, file_paths = line.split(maxsplit=1)
             assert current_time is not None
-            for path in paths.split():
-                if path in set_paths and path not in path_times:
-                    path_times[path] = current_time
+            for file_path in file_paths.split("\t"):
+                if file_path in set_paths and file_path not in path_times:
+                    path_times[file_path] = current_time
         assert set(path_times.keys()) == set_paths
         return path_times
 
@@ -199,19 +191,25 @@ class Releaser:
             return False
         return True
 
-    def _get_git_contents(self) -> dict[str, (TreeItem, bytes, datetime.datetime)]:
+    def _get_git_contents(self) -> dict[str, TreeItem]:
         contents_tgz = subprocess.check_output(["git", "archive", "--format=tar.gz", self.commit, "-o", "/dev/stdout"], text=False)
         contents = tarfile.open(fileobj=io.BytesIO(contents_tgz), mode="r:gz")
         filenames = tuple(m.name for m in contents if m.isfile())
         assert "src/SDL.c" in filenames
-        assert "include/SDL3/SDL.h" in filenames
+        assert "include/SDL.h" in filenames
         file_times = self._get_file_times(filenames)
-        git_contents = {
-            ti.name: self.TreeItem(path=ti.name, mode=ti.mode, data=contents.extractfile(ti.name).read(), time=file_times[ti.name]) for ti in contents if ti.isfile() and self._path_filter(ti.name)
-        }
+        git_contents = {}
+        for ti in contents:
+            if not ti.isfile():
+                continue
+            if not self._path_filter(ti.name):
+                continue
+            contents_file = contents.extractfile(ti.name)
+            assert contents_file, f"{ti.name} is not a file"
+            git_contents[ti.name] = self.TreeItem(path=ti.name, mode=ti.mode, data=contents_file.read(), time=file_times[ti.name])
         return git_contents
 
-    def create_source_archives(self):
+    def create_source_archives(self) -> None:
         archive_base = f"{self.project}-{self.version}"
 
         git_contents = self._get_git_contents()
@@ -265,22 +263,22 @@ class Releaser:
 
             self.artifacts[f"src-tar-{comp}"] = tar_path
 
-    def create_xcframework(self, configuration: str="Release"):
-        dmg_in = self.root / f"Xcode/SDL/build/SDL3.dmg"
+    def create_framework(self, configuration: str="Release") -> None:
+        dmg_in = self.root / f"Xcode/SDL/build/{self.project}.dmg"
         dmg_in.unlink(missing_ok=True)
-        self.executer.run(["xcodebuild", "-project", str(self.root / "Xcode/SDL/SDL.xcodeproj"), "-target", "SDL3.dmg", "-configuration", configuration])
+        self.executer.run(["xcodebuild", "-project", str(self.root / "Xcode/SDL/SDL.xcodeproj"), "-target", "Standard DMG", "-configuration", configuration])
         if self.dry:
             dmg_in.parent.mkdir(parents=True, exist_ok=True)
             dmg_in.touch()
 
-        assert dmg_in.is_file(), "SDL3.dmg was not created by xcodebuild"
+        assert dmg_in.is_file(), f"{self.project}.dmg was not created by xcodebuild"
 
         dmg_out = self.dist_path / f"{self.project}-{self.version}.dmg"
         shutil.copy(dmg_in, dmg_out)
         self.artifacts["dmg"] = dmg_out
 
     @property
-    def git_hash_data(self):
+    def git_hash_data(self) -> bytes:
         return f"{self.commit}\n".encode()
 
     def _tar_add_git_hash(self, tar_object: tarfile.TarFile, root: typing.Optional[str]=None, time: typing.Optional[datetime.datetime]=None):
@@ -293,7 +291,7 @@ class Releaser:
         tar_info = tarfile.TarInfo(path)
         tar_info.mode = 0o100644
         tar_info.size = len(self.git_hash_data)
-        tar_info.mtime = time.timestamp()
+        tar_info.mtime = int(time.timestamp())
         tar_object.addfile(tar_info, fileobj=io.BytesIO(self.git_hash_data))
 
     def _zip_add_git_hash(self, zip_file: zipfile.ZipFile, root: typing.Optional[str]=None, time: typing.Optional[datetime.datetime]=None):
@@ -309,7 +307,7 @@ class Releaser:
         zip_info.compress_type = zipfile.ZIP_DEFLATED
         zip_file.writestr(zip_info, data=self.git_hash_data)
 
-    def create_mingw_archives(self):
+    def create_mingw_archives(self) -> None:
         build_type = "Release"
         mingw_archs = ("i686", "x86_64")
         build_parent_dir = self.root / "build-mingw"
@@ -353,33 +351,35 @@ class Releaser:
                 self.executer.run(["cmake", "--install", str(build_path), "--strip", "--config", build_type])
             arch_files[arch] = list(Path(r) / f for r, _, files in os.walk(install_path) for f in files)
 
-        extra_files = [
+        extra_files = (
             ("mingw/pkg-support/INSTALL.txt", ""),
             ("mingw/pkg-support/Makefile", ""),
-            ("mingw/pkg-support/cmake/sdl3-config.cmake", "cmake/"),
-            ("mingw/pkg-support/cmake/sdl3-config-version.cmake", "cmake/"),
+            ("mingw/pkg-support/cmake/sdl2-config.cmake", "cmake/"),
+            ("mingw/pkg-support/cmake/sdl2-config-version.cmake", "cmake/"),
             ("BUGS.txt", ""),
-            ("CREDITS.md", ""),
+            ("CREDITS.txt", ""),
             ("README-SDL.txt", ""),
             ("WhatsNew.txt", ""),
             ("LICENSE.txt", ""),
             ("README.md", ""),
-        ]
+            ("docs/*.md", "docs/"),
+        )
         test_files = list(Path(r) / f for r, _, files in os.walk(self.root / "test") for f in files)
 
-        # FIXME: split SDL3.dll debug information into debug library
-        # objcopy --only-keep-debug SDL3.dll SDL3.debug.dll
-        # objcopy --add-gnu-debuglink=SDL3.debug.dll SDL3.dll
-        # objcopy --strip-debug SDL3.dll
+        # FIXME: split SDL2.dll debug information into debug library
+        # objcopy --only-keep-debug SDL2.dll SDL2.debug.dll
+        # objcopy --add-gnu-debuglink=SDL2.debug.dll SDL2.dll
+        # objcopy --strip-debug SDL2.dll
 
         for comp in tar_exts:
             logger.info("Creating %s...", tar_paths[comp])
             with tarfile.open(tar_paths[comp], f"w:{comp}") as tar_object:
                 arc_root = f"{self.project}-{self.version}"
-                for file_path, arcdirname in extra_files:
+                for file_path_glob, arcdirname in extra_files:
                     assert not arcdirname or arcdirname[-1] == "/"
-                    arcname = f"{arc_root}/{arcdirname}{Path(file_path).name}"
-                    tar_object.add(self.root / file_path, arcname=arcname)
+                    for file_path in glob.glob(file_path_glob, root_dir=self.root):
+                        arcname = f"{arc_root}/{arcdirname}{Path(file_path).name}"
+                        tar_object.add(self.root / file_path, arcname=arcname)
                 for arch in mingw_archs:
                     install_path = arch_install_paths[arch]
                     arcname_parent = f"{arc_root}/{arch}-w64-mingw32"
@@ -393,20 +393,23 @@ class Releaser:
 
                 self.artifacts[f"mingw-devel-tar-{comp}"] = tar_paths[comp]
 
-    def build_vs(self, arch: str, platform: str, vs: VisualStudio, configuration: str="Release"):
+    def build_vs(self, arch: str, platform: str, vs: VisualStudio, configuration: str="Release") -> VcArchDevel:
         dll_path = self.root / f"VisualC/SDL/{platform}/{configuration}/{self.project}.dll"
         pdb_path = self.root / f"VisualC/SDL/{platform}/{configuration}/{self.project}.pdb"
         imp_path = self.root / f"VisualC/SDL/{platform}/{configuration}/{self.project}.lib"
-        test_path = self.root / f"VisualC/SDL_test/{platform}/{configuration}/{self.project}_test.lib"
+        test_path = self.root / f"VisualC/SDLtest/{platform}/{configuration}/{self.project}test.lib"
+        main_path = self.root / f"VisualC/SDLmain/{platform}/{configuration}/{self.project}main.lib"
 
         dll_path.unlink(missing_ok=True)
         pdb_path.unlink(missing_ok=True)
         imp_path.unlink(missing_ok=True)
         test_path.unlink(missing_ok=True)
+        main_path.unlink(missing_ok=True)
 
         projects = [
             self.root / "VisualC/SDL/SDL.vcxproj",
-            self.root / "VisualC/SDL_test/SDL_test.vcxproj",
+            self.root / "VisualC/SDLmain/SDLmain.vcxproj",
+            self.root / "VisualC/SDLtest/SDLtest.vcxproj",
         ]
 
         with self.section_printer.group(f"Build {arch} VS binary"):
@@ -417,13 +420,16 @@ class Releaser:
             dll_path.touch()
             pdb_path.touch()
             imp_path.touch()
+            main_path.parent.mkdir(parents=True, exist_ok=True)
+            main_path.touch()
             test_path.parent.mkdir(parents=True, exist_ok=True)
             test_path.touch()
 
-        assert dll_path.is_file(), "SDL3.dll has not been created"
-        assert pdb_path.is_file(), "SDL3.pdb has not been created"
-        assert imp_path.is_file(), "SDL3.lib has not been created"
-        assert test_path.is_file(), "SDL3_test.lib has not been created"
+        assert dll_path.is_file(), f"{self.project}.dll has not been created"
+        assert pdb_path.is_file(), f"{self.project}.pdb has not been created"
+        assert imp_path.is_file(), f"{self.project}.lib has not been created"
+        assert main_path.is_file(), f"{self.project}main.lib has not been created"
+        assert test_path.is_file(), f"{self.project}est.lib has not been created"
 
         zip_path = self.dist_path / f"{self.project}-{self.version}-win32-{arch}.zip"
         zip_path.unlink(missing_ok=True)
@@ -436,75 +442,10 @@ class Releaser:
             self._zip_add_git_hash(zip_file=zf)
         self.artifacts[f"VC-{arch}"] = zip_path
 
-        return VcArchDevel(dll=dll_path, pdb=pdb_path, imp=imp_path, test=test_path)
+        return VcArchDevel(dll=dll_path, pdb=pdb_path, imp=imp_path, main=main_path, test=test_path)
 
-    def build_vs_cmake(self, arch: str, arch_cmake: str):
-        build_path = self.root / f"build-vs-{arch}"
-        install_path = build_path / "prefix"
-        dll_path = install_path / f"bin/{self.project}.dll"
-        pdb_path = install_path / f"bin/{self.project}.pdb"
-        imp_path = install_path / f"lib/{self.project}.lib"
-        test_path = install_path / f"lib/{self.project}_test.lib"
 
-        dll_path.unlink(missing_ok=True)
-        pdb_path.unlink(missing_ok=True)
-        imp_path.unlink(missing_ok=True)
-        test_path.unlink(missing_ok=True)
-
-        build_type = "Release"
-
-        shutil.rmtree(install_path, ignore_errors=True)
-        build_path.mkdir(parents=True, exist_ok=True)
-        with self.section_printer.group(f"Configure VC CMake project for {arch}"):
-            self.executer.run([
-                "cmake", "-S", str(self.root), "-B", str(build_path),
-                "--fresh",
-                "-A", arch_cmake,
-                "-DSDL_SHARED=ON",
-                "-DSDL_STATIC=OFF",
-                "-DSDL_DISABLE_INSTALL_DOCS=ON",
-                "-DSDL_TEST_LIBRARY=ON",
-                "-DSDL_TESTS=OFF",
-                "-DCMAKE_INSTALL_BINDIR=bin",
-                "-DCMAKE_INSTALL_DATAROOTDIR=share",
-                "-DCMAKE_INSTALL_INCLUDEDIR=include",
-                "-DCMAKE_INSTALL_LIBDIR=lib",
-                f"-DCMAKE_BUILD_TYPE={build_type}",
-                f"-DCMAKE_INSTALL_PREFIX={install_path}",
-                # MSVC debug information format flags are selected by an abstraction
-                "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW",
-                # MSVC debug information format
-                "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase",
-                # Linker flags for executables
-                "-DCMAKE_EXE_LINKER_FLAGS=-DEBUG",
-                # Linker flag for shared libraries
-                "-DCMAKE_SHARED_LINKER_FLAGS=-INCREMENTAL:NO -DEBUG -OPT:REF -OPT:ICF",
-            ])
-
-        with self.section_printer.group(f"Build VC CMake project for {arch}"):
-            self.executer.run(["cmake", "--build", str(build_path), "--verbose", "--config", build_type])
-        with self.section_printer.group(f"Install VC CMake project for {arch}"):
-            self.executer.run(["cmake", "--install", str(build_path), "--config", build_type])
-
-        assert dll_path.is_file(), "SDL3.dll has not been created"
-        assert pdb_path.is_file(), "SDL3.pdb has not been created"
-        assert imp_path.is_file(), "SDL3.lib has not been created"
-        assert test_path.is_file(), "SDL3_test.lib has not been created"
-
-        zip_path = self.dist_path / f"{self.project}-{self.version}-win32-{arch}.zip"
-        zip_path.unlink(missing_ok=True)
-        logger.info("Creating %s", zip_path)
-        with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            logger.debug("Adding %s", dll_path.name)
-            zf.write(dll_path, arcname=dll_path.name)
-            logger.debug("Adding %s", "README-SDL.txt")
-            zf.write(self.root / "README-SDL.txt", arcname="README-SDL.txt")
-            self._zip_add_git_hash(zip_file=zf)
-        self.artifacts[f"VC-{arch}"] = zip_path
-
-        return VcArchDevel(dll=dll_path, pdb=pdb_path, imp=imp_path, test=test_path)
-
-    def build_vs_devel(self, arch_vc: dict[str, VcArchDevel]):
+    def build_vs_devel(self, arch_vc: dict[str, VcArchDevel]) -> None:
         zip_path = self.dist_path / f"{self.project}-devel-{self.version}-VC.zip"
         archive_prefix = f"{self.project}-{self.version}"
 
@@ -525,12 +466,12 @@ class Releaser:
                 zip_file(zf, path=binaries.dll, arcrelpath=f"lib/{arch}/{binaries.dll.name}")
                 zip_file(zf, path=binaries.imp, arcrelpath=f"lib/{arch}/{binaries.imp.name}")
                 zip_file(zf, path=binaries.pdb, arcrelpath=f"lib/{arch}/{binaries.pdb.name}")
+                zip_file(zf, path=binaries.main, arcrelpath=f"lib/{arch}/{binaries.main.name}")
                 zip_file(zf, path=binaries.test, arcrelpath=f"lib/{arch}/{binaries.test.name}")
 
-            zip_directory(zf, directory=self.root / "include/SDL3", arcrelpath="include/SDL3")
+            zip_directory(zf, directory=self.root / "include", arcrelpath="include")
             zip_directory(zf, directory=self.root / "docs", arcrelpath="docs")
             zip_directory(zf, directory=self.root / "VisualC/pkg-support/cmake", arcrelpath="cmake")
-            zip_file(zf, path=self.root / "cmake/sdlcpu.cmake", arcrelpath="cmake/sdlcpu.cmake")
 
             for txt in ("BUGS.txt", "README-SDL.txt", "WhatsNew.txt"):
                 zip_file(zf, path=self.root / txt, arcrelpath=txt)
@@ -540,196 +481,24 @@ class Releaser:
             self._zip_add_git_hash(zip_file=zf, root=archive_prefix)
         self.artifacts["VC-devel"] = zip_path
 
-    def detect_android_api(self, android_home: str) -> typing.Optional[int]:
-        platform_dirs = list(Path(p) for p in glob.glob(f"{android_home}/platforms/android-*"))
-        re_platform = re.compile("android-([0-9]+)")
-        platform_versions = []
-        for platform_dir in platform_dirs:
-            logger.debug("Found Android Platform SDK: %s", platform_dir)
-            if m:= re_platform.match(platform_dir.name):
-                platform_versions.append(int(m.group(1)))
-        platform_versions.sort()
-        logger.info("Available platform versions: %s", platform_versions)
-        platform_versions = list(filter(lambda v: v >= ANDROID_MINIMUM_API, platform_versions))
-        logger.info("Valid platform versions (>=%d): %s", ANDROID_MINIMUM_API, platform_versions)
-        if not platform_versions:
-            return None
-        android_api = platform_versions[0]
-        logger.info("Selected API version %d", android_api)
-        return android_api
-
-    def get_prefab_json_text(self):
-        return textwrap.dedent(f"""\
-            {{
-                "schema_version": 2,
-                "name": "{self.project}",
-                "version": "{self.version}",
-                "dependencies": []
-            }}
-        """)
-
-    def get_prefab_module_json_text(self, library_name: str, extra_libs: list[str]):
-        export_libraries_str = ", ".join(f"\"-l{lib}\"" for lib in extra_libs)
-        return textwrap.dedent(f"""\
-            {{
-                "export_libraries": [{export_libraries_str}],
-                "library_name": "lib{library_name}"
-            }}
-        """)
-
-    def get_prefab_abi_json_text(self, abi: str, cpp: bool, shared: bool):
-        return textwrap.dedent(f"""\
-            {{
-              "abi": "{abi}",
-              "api": {ANDROID_MINIMUM_API},
-              "ndk": {ANDROID_MINIMUM_NDK},
-              "stl": "{'c++_shared' if cpp else 'none'}",
-              "static": {'true' if not shared else 'false'}
-            }}
-        """)
-
-    def get_android_manifest_text(self):
-        return textwrap.dedent(f"""\
-            <manifest
-                xmlns:android="http://schemas.android.com/apk/res/android"
-                package="org.libsdl.android.{self.project}" android:versionCode="1"
-                android:versionName="1.0">
-                <uses-sdk android:minSdkVersion="{ANDROID_MINIMUM_API}"
-                          android:targetSdkVersion="{ANDROID_TARGET_API}" />
-            </manifest>
-        """)
-
-    def create_android_archives(self, android_api: int, android_home: Path, android_ndk_home: Path, android_abis: list[str]):
-        cmake_toolchain_file = Path(android_ndk_home) / "build/cmake/android.toolchain.cmake"
-        if not cmake_toolchain_file.exists():
-            logger.error("CMake toolchain file does not exist (%s)", cmake_toolchain_file)
-            raise SystemExit(1)
-        aar_path =  self.dist_path / f"{self.project}-{self.version}.aar"
-        added_global_files = False
-        with zipfile.ZipFile(aar_path, "w", compression=zipfile.ZIP_DEFLATED) as zip_object:
-            zip_object.writestr("AndroidManifest.xml", self.get_android_manifest_text())
-            zip_object.write(self.root / "android-project/app/proguard-rules.pro", arcname="proguard.txt")
-            zip_object.write(self.root / "LICENSE.txt", arcname="META-INF/LICENSE.txt")
-            zip_object.writestr("prefab/prefab.json", self.get_prefab_json_text())
-            self._zip_add_git_hash(zip_file=zip_object)
-
-            for android_abi in android_abis:
-                with self.section_printer.group(f"Building for Android {android_api} {android_abi}"):
-                    build_dir = self.root / "build-android" / f"{android_abi}-build"
-                    install_dir = self.root / "install-android" / f"{android_abi}-install"
-                    shutil.rmtree(install_dir, ignore_errors=True)
-                    assert not install_dir.is_dir(), f"{install_dir} should not exist prior to build"
-                    cmake_args = [
-                        "cmake",
-                        "-S", str(self.root),
-                        "-B", str(build_dir),
-                        "--fresh",
-                        f'''-DCMAKE_C_FLAGS="-ffile-prefix-map={self.root}=/src/{self.project}"''',
-                        f'''-DCMAKE_CXX_FLAGS="-ffile-prefix-map={self.root}=/src/{self.project}"''',
-                        "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-                        f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain_file}",
-                        f"-DANDROID_PLATFORM={android_api}",
-                        f"-DANDROID_ABI={android_abi}",
-                        f"-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
-                        "-DSDL_SHARED=ON",
-                        "-DSDL_STATIC=ON",
-                        "-DSDL_STATIC_PIC=ON",
-                        "-DSDL_TEST_LIBRARY=ON",
-                        "-DSDL_DISABLE_ANDROID_JAR=OFF",
-                        "-DSDL_TESTS=OFF",
-                        f"-DCMAKE_INSTALL_PREFIX={install_dir}",
-                        "-DSDL_DISABLE_INSTALL=OFF",
-                        "-DSDL_DISABLE_INSTALL_DOCS=OFF",
-                        "-DCMAKE_INSTALL_INCLUDEDIR=include ",
-                        "-DCMAKE_INSTALL_LIBDIR=lib",
-                        "-DCMAKE_INSTALL_DATAROOTDIR=share",
-                        "-DCMAKE_BUILD_TYPE=Release",
-                        f"-G{self.cmake_generator}",
-                    ]
-                    build_args = [
-                        "cmake",
-                        "--build", str(build_dir),
-                        "--config", "RelWithDebInfo",
-                    ]
-                    install_args = [
-                        "cmake",
-                        "--install", str(build_dir),
-                        "--config", "RelWithDebInfo",
-                    ]
-                    self.executer.run(cmake_args)
-                    self.executer.run(build_args)
-                    self.executer.run(install_args)
-
-                    main_so_library = install_dir / "lib" / f"lib{self.project}.so"
-                    logger.debug("Expecting library %s", main_so_library)
-                    assert main_so_library.is_file(), "CMake should have built a shared library (e.g. libSDL3.so)"
-
-                    main_static_library = install_dir / "lib" / f"lib{self.project}.a"
-                    logger.debug("Expecting library %s", main_static_library)
-                    assert main_static_library.is_file(), "CMake should have built a static library (e.g. libSDL3.a)"
-
-                    test_library = install_dir / "lib" / f"lib{self.project}_test.a"
-                    logger.debug("Expecting library %s", test_library)
-                    assert test_library.is_file(), "CMake should have built a static test library (e.g. libSDL3_test.a)"
-
-                    java_jar = install_dir / f"share/java/{self.project}/{self.project}-{self.version}.jar"
-                    logger.debug("Expecting java archive: %s", java_jar)
-                    assert java_jar.is_file(), "CMake should have compiled the java sources and archived them into a JAR"
-
-                    javasources_jar = install_dir / f"share/java/{self.project}/{self.project}-{self.version}-sources.jar"
-                    logger.debug("Expecting java sources archive %s", javasources_jar)
-                    assert javasources_jar.is_file(), "CMake should have archived the java sources into a JAR"
-
-                    javadoc_dir = install_dir / "share/javadoc" / self.project
-                    logger.debug("Expecting javadoc archive %s", javadoc_dir)
-                    assert javadoc_dir.is_dir(), "CMake should have built javadoc documentation for the java sources"
-                    if not added_global_files:
-                        zip_object.write(java_jar, arcname="classes.jar")
-                        zip_object.write(javasources_jar, arcname="classes-sources.jar", )
-                        doc_jar_path = install_dir / "classes-doc.jar"
-
-                        javadoc_jar_args = ["jar", "--create", "--file", str(doc_jar_path)]
-                        for fn in javadoc_dir.iterdir():
-                            javadoc_jar_args.extend(["-C", str(javadoc_dir), fn.name])
-                        self.executer.run(javadoc_jar_args)
-                        zip_object.write(doc_jar_path, arcname="classes-doc.jar")
-
-                        for header in (install_dir / "include" / self.project).iterdir():
-                            zip_object.write(header, arcname=f"prefab/modules/{self.project}-shared/include/{self.project}/{header.name}")
-                            zip_object.write(header, arcname=f"prefab/modules/{self.project}-static/include/{self.project}/{header.name}")
-
-                        zip_object.writestr(f"prefab/modules/{self.project}-shared/module.json", self.get_prefab_module_json_text(library_name=self.project, extra_libs=[]))
-                        zip_object.writestr(f"prefab/modules/{self.project}-static/module.json", self.get_prefab_module_json_text(library_name=self.project, extra_libs=list(ANDROID_LIBRARIES)))
-                        zip_object.writestr(f"prefab/modules/{self.project}_test/module.json", self.get_prefab_module_json_text(library_name=f"{self.project}_test", extra_libs=list()))
-                        added_global_files = True
-
-                    zip_object.write(main_so_library, arcname=f"prefab/modules/{self.project}-shared/libs/android.{android_abi}/lib{self.project}.so")
-                    zip_object.writestr(f"prefab/modules/{self.project}-shared/libs/android.{android_abi}/abi.json", self.get_prefab_abi_json_text(abi=android_abi, cpp=False, shared=True))
-                    zip_object.write(main_static_library, arcname=f"prefab/modules/{self.project}-static/libs/android.{android_abi}/lib{self.project}.a")
-                    zip_object.writestr(f"prefab/modules/{self.project}-static/libs/android.{android_abi}/abi.json", self.get_prefab_abi_json_text(abi=android_abi, cpp=False, shared=False))
-                    zip_object.write(test_library, arcname=f"prefab/modules/{self.project}_test/libs/android.{android_abi}/lib{self.project}_test.a")
-                    zip_object.writestr(f"prefab/modules/{self.project}_test/libs/android.{android_abi}/abi.json", self.get_prefab_abi_json_text(abi=android_abi, cpp=False, shared=False))
-
-        self.artifacts[f"android-prefab-aar"] = aar_path
-
     @classmethod
-    def extract_sdl_version(cls, root: Path, project: str):
-        with open(root / f"include/{project}/SDL_version.h", "r") as f:
+    def extract_sdl_version(cls, root: Path, project: str) -> str:
+        with open(root / f"include/SDL_version.h", "r") as f:
             text = f.read()
         major = next(re.finditer(r"^#define SDL_MAJOR_VERSION\s+([0-9]+)$", text, flags=re.M)).group(1)
         minor = next(re.finditer(r"^#define SDL_MINOR_VERSION\s+([0-9]+)$", text, flags=re.M)).group(1)
-        micro = next(re.finditer(r"^#define SDL_MICRO_VERSION\s+([0-9]+)$", text, flags=re.M)).group(1)
+        micro = next(re.finditer(r"^#define SDL_PATCHLEVEL\s+([0-9]+)$", text, flags=re.M)).group(1)
         return f"{major}.{minor}.{micro}"
 
 
-def main(argv=None):
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False, description="Create SDL release artifacts")
     parser.add_argument("--root", metavar="DIR", type=Path, default=Path(__file__).absolute().parents[1], help="Root of SDL")
     parser.add_argument("--out", "-o", metavar="DIR", dest="dist_path", type=Path, default="dist", help="Output directory")
     parser.add_argument("--github", action="store_true", help="Script is running on a GitHub runner")
     parser.add_argument("--commit", default="HEAD", help="Git commit/tag of which a release should be created")
-    parser.add_argument("--project", required=True, help="Name of the project (e.g. SDL3")
-    parser.add_argument("--create", choices=["source", "mingw", "win32", "xcframework", "android"], required=True, action="append", dest="actions", help="What to do")
+    parser.add_argument("--project", required=True, help="Name of the project (e.g. SDL2")
+    parser.add_argument("--create", choices=["source", "mingw", "win32", "framework", "android"], required=True, action="append", dest="actions", help="What to do")
     parser.set_defaults(loglevel=logging.INFO)
     parser.add_argument('--vs-year', dest="vs_year", help="Visual Studio year")
     parser.add_argument('--android-api', type=int, dest="android_api", help="Android API version")
@@ -751,7 +520,7 @@ def main(argv=None):
         args.dist_path = args.dist_path / "dry"
 
     if args.github:
-        section_printer = GitHubSectionPrinter()
+        section_printer: SectionPrinter = GitHubSectionPrinter()
     else:
         section_printer = SectionPrinter()
 
@@ -807,25 +576,23 @@ def main(argv=None):
         with section_printer.group("Create source archives"):
             releaser.create_source_archives()
 
-    if "xcframework" in args.actions:
+    if "framework" in args.actions:
         if platform.system() != "Darwin" and not args.dry:
-            parser.error("xcframework artifact(s) can only be built on Darwin")
+            parser.error("framework artifact(s) can only be built on Darwin")
 
-        releaser.create_xcframework()
+        releaser.create_framework()
 
     if "win32" in args.actions:
         if platform.system() != "Windows" and not args.dry:
             parser.error("win32 artifact(s) can only be built on Windows")
         with section_printer.group("Find Visual Studio"):
             vs = VisualStudio(executer=executer)
-        arm64 = releaser.build_vs_cmake(arch="arm64", arch_cmake="ARM64")
         x86 = releaser.build_vs(arch="x86", platform="Win32", vs=vs)
         x64 = releaser.build_vs(arch="x64", platform="x64", vs=vs)
         with section_printer.group("Create SDL VC development zip"):
             arch_vc = {
                 "x86": x86,
                 "x64": x64,
-                "arm64": arm64,
             }
             releaser.build_vs_devel(arch_vc)
 

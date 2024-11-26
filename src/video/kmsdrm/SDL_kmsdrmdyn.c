@@ -19,7 +19,7 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#include "SDL_internal.h"
+#include "../../SDL_internal.h"
 
 #ifdef SDL_VIDEO_DRIVER_KMSDRM
 
@@ -28,6 +28,9 @@
 #include "SDL_kmsdrmdyn.h"
 
 #ifdef SDL_VIDEO_DRIVER_KMSDRM_DYNAMIC
+
+#include "SDL_name.h"
+#include "SDL_loadso.h"
 
 typedef struct
 {
@@ -44,11 +47,11 @@ static kmsdrmdynlib kmsdrmlibs[] = {
     { NULL, SDL_VIDEO_DRIVER_KMSDRM_DYNAMIC }
 };
 
-static void *KMSDRM_GetSym(const char *fnname, int *pHasModule)
+static void *KMSDRM_GetSym(const char *fnname, int *pHasModule, SDL_bool required)
 {
     int i;
     void *fn = NULL;
-    for (i = 0; i < SDL_arraysize(kmsdrmlibs); i++) {
+    for (i = 0; i < SDL_TABLESIZE(kmsdrmlibs); i++) {
         if (kmsdrmlibs[i].lib) {
             fn = SDL_LoadFunction(kmsdrmlibs[i].lib, fnname);
             if (fn) {
@@ -64,7 +67,7 @@ static void *KMSDRM_GetSym(const char *fnname, int *pHasModule)
         SDL_Log("KMSDRM: Symbol '%s' NOT FOUND!\n", fnname);
 #endif
 
-    if (!fn) {
+    if (!fn && required) {
         *pHasModule = 0; /* kill this module. */
     }
 
@@ -77,6 +80,7 @@ static void *KMSDRM_GetSym(const char *fnname, int *pHasModule)
 #define SDL_KMSDRM_MODULE(modname)       int SDL_KMSDRM_HAVE_##modname = 0;
 #define SDL_KMSDRM_SYM(rc, fn, params)   SDL_DYNKMSDRMFN_##fn KMSDRM_##fn = NULL;
 #define SDL_KMSDRM_SYM_CONST(type, name) SDL_DYNKMSDRMCONST_##name KMSDRM_##name = NULL;
+#define SDL_KMSDRM_SYM_OPT(rc, fn, params)  SDL_DYNKMSDRMFN_##fn KMSDRM_##fn = NULL;
 #include "SDL_kmsdrmsym.h"
 
 static int kmsdrm_load_refcount = 0;
@@ -94,10 +98,11 @@ void SDL_KMSDRM_UnloadSymbols(void)
 #define SDL_KMSDRM_MODULE(modname)       SDL_KMSDRM_HAVE_##modname = 0;
 #define SDL_KMSDRM_SYM(rc, fn, params)   KMSDRM_##fn = NULL;
 #define SDL_KMSDRM_SYM_CONST(type, name) KMSDRM_##name = NULL;
+#define SDL_KMSDRM_SYM_OPT(rc, fn, params)  KMSDRM_##fn = NULL;
 #include "SDL_kmsdrmsym.h"
 
 #ifdef SDL_VIDEO_DRIVER_KMSDRM_DYNAMIC
-            for (i = 0; i < SDL_arraysize(kmsdrmlibs); i++) {
+            for (i = 0; i < SDL_TABLESIZE(kmsdrmlibs); i++) {
                 if (kmsdrmlibs[i].lib) {
                     SDL_UnloadObject(kmsdrmlibs[i].lib);
                     kmsdrmlibs[i].lib = NULL;
@@ -118,7 +123,7 @@ int SDL_KMSDRM_LoadSymbols(void)
 #ifdef SDL_VIDEO_DRIVER_KMSDRM_DYNAMIC
         int i;
         int *thismod = NULL;
-        for (i = 0; i < SDL_arraysize(kmsdrmlibs); i++) {
+        for (i = 0; i < SDL_TABLESIZE(kmsdrmlibs); i++) {
             if (kmsdrmlibs[i].libname) {
                 kmsdrmlibs[i].lib = SDL_LoadObject(kmsdrmlibs[i].libname);
             }
@@ -127,9 +132,10 @@ int SDL_KMSDRM_LoadSymbols(void)
 #define SDL_KMSDRM_MODULE(modname) SDL_KMSDRM_HAVE_##modname = 1; /* default yes */
 #include "SDL_kmsdrmsym.h"
 
-#define SDL_KMSDRM_MODULE(modname)       thismod = &SDL_KMSDRM_HAVE_##modname;
-#define SDL_KMSDRM_SYM(rc, fn, params)   KMSDRM_##fn = (SDL_DYNKMSDRMFN_##fn)KMSDRM_GetSym(#fn, thismod);
-#define SDL_KMSDRM_SYM_CONST(type, name) KMSDRM_##name = *(SDL_DYNKMSDRMCONST_##name *)KMSDRM_GetSym(#name, thismod);
+#define SDL_KMSDRM_MODULE(modname)          thismod = &SDL_KMSDRM_HAVE_##modname;
+#define SDL_KMSDRM_SYM(rc, fn, params)      KMSDRM_##fn = (SDL_DYNKMSDRMFN_##fn)KMSDRM_GetSym(#fn, thismod, SDL_TRUE);
+#define SDL_KMSDRM_SYM_CONST(type, name)    KMSDRM_##name = *(SDL_DYNKMSDRMCONST_##name *)KMSDRM_GetSym(#name, thismod, SDL_TRUE);
+#define SDL_KMSDRM_SYM_OPT(rc, fn, params)  KMSDRM_##fn = (SDL_DYNKMSDRMFN_##fn)KMSDRM_GetSym(#fn, thismod, SDL_FALSE);
 #include "SDL_kmsdrmsym.h"
 
         if ((SDL_KMSDRM_HAVE_LIBDRM) && (SDL_KMSDRM_HAVE_GBM)) {
@@ -146,6 +152,7 @@ int SDL_KMSDRM_LoadSymbols(void)
 #define SDL_KMSDRM_MODULE(modname)       SDL_KMSDRM_HAVE_##modname = 1; /* default yes */
 #define SDL_KMSDRM_SYM(rc, fn, params)   KMSDRM_##fn = fn;
 #define SDL_KMSDRM_SYM_CONST(type, name) KMSDRM_##name = name;
+#define SDL_KMSDRM_SYM_OPT(rc, fn, params)  KMSDRM_##fn = fn;
 #include "SDL_kmsdrmsym.h"
 
 #endif
@@ -155,3 +162,5 @@ int SDL_KMSDRM_LoadSymbols(void)
 }
 
 #endif /* SDL_VIDEO_DRIVER_KMSDRM */
+
+/* vi: set ts=4 sw=4 expandtab: */

@@ -18,7 +18,6 @@
      misrepresented as being the original software.
   3. This notice may not be removed or altered from any source distribution.
 */
-#include "SDL_internal.h"
 
 #ifndef SDL_utils_h_
 #define SDL_utils_h_
@@ -28,28 +27,6 @@
 /* Return the smallest power of 2 greater than or equal to 'x' */
 extern int SDL_powerof2(int x);
 
-extern void SDL_CalculateFraction(float x, int *numerator, int *denominator);
-
-extern SDL_bool SDL_endswith(const char *string, const char *suffix);
-
-typedef enum
-{
-    SDL_OBJECT_TYPE_UNKNOWN,
-    SDL_OBJECT_TYPE_WINDOW,
-    SDL_OBJECT_TYPE_RENDERER,
-    SDL_OBJECT_TYPE_TEXTURE,
-    SDL_OBJECT_TYPE_JOYSTICK,
-    SDL_OBJECT_TYPE_GAMEPAD,
-    SDL_OBJECT_TYPE_HAPTIC,
-    SDL_OBJECT_TYPE_SENSOR,
-    SDL_OBJECT_TYPE_HIDAPI_DEVICE,
-    SDL_OBJECT_TYPE_HIDAPI_JOYSTICK,
-
-} SDL_ObjectType;
-
-extern Uint32 SDL_GetNextObjectID(void);
-extern void SDL_SetObjectValid(void *object, SDL_ObjectType type, SDL_bool valid);
-extern SDL_bool SDL_ObjectValid(void *object, SDL_ObjectType type);
-extern void SDL_SetObjectsInvalid(void);
-
 #endif /* SDL_utils_h_ */
+
+/* vi: set ts=4 sw=4 expandtab: */

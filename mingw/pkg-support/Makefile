@@ -19,7 +19,9 @@ cross:
 install-package:
 	@if test -d $(arch) && test -d $(prefix); then \
 	    (cd $(arch) && cp -rv bin include lib share $(prefix)/); \
-	    sed "s|^prefix=.*|prefix=$(prefix)|" <$(arch)/lib/pkgconfig/sdl3.pc >$(prefix)/lib/pkgconfig/sdl3.pc; \
+	    sed "s|^prefix=.*|prefix=$(prefix)|" <$(arch)/bin/sdl2-config >$(prefix)/bin/sdl2-config; \
+	    chmod 755 $(prefix)/bin/sdl2-config; \
+	    sed "s|^prefix=.*|prefix=$(prefix)|" <$(arch)/lib/pkgconfig/sdl2.pc >$(prefix)/lib/pkgconfig/sdl2.pc; \
 	else \
 	    echo "*** ERROR: $(arch) or $(prefix) does not exist!"; \
 	    exit 1; \
