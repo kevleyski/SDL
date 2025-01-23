@@ -15,3 +15,5 @@ with README.md
 Enjoy!
 
 Sam Lantinga (slouken@libsdl.org)
+
+KJSL NOTE: This is SDL2 legacy which a lot of stuff still dependes on for SDL3 wasm etc you wasn the SDL3 branch!
