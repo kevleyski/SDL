@@ -15,3 +15,5 @@ with README.md
 Enjoy!
 
 Sam Lantinga (slouken@libsdl.org)
+
+KJSL: Note legacy SDL2, for wasm etc you want SDL3 branch
