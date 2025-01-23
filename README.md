@@ -1,5 +1,5 @@
 
-# Simple DirectMedia Layer (SDL) Version 2.0
+# Simple DirectMedia Layer (SDL) Version 3.0
 
 https://www.libsdl.org/
 
@@ -16,4 +16,4 @@ Enjoy!
 
 Sam Lantinga (slouken@libsdl.org)
 
-KJSL NOTE: This is SDL2 legacy which a lot of stuff still dependes on for SDL3 wasm etc you wasn the SDL3 branch!
+KJSL NOTE: This is SDL3 wasm branch
